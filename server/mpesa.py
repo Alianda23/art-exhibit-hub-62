@@ -1,4 +1,3 @@
-
 import requests
 import base64
 import json
@@ -51,7 +50,7 @@ def initiate_stk_push(phone_number, amount, account_reference, order_type, order
     
     password, timestamp = generate_password()
     
-    # Format phone number to match M-Pesa requirements
+    # Format phone number
     if phone_number.startswith('+'):
         phone_number = phone_number[1:]
     if phone_number.startswith('0'):
@@ -83,22 +82,76 @@ def initiate_stk_push(phone_number, amount, account_reference, order_type, order
         print(f"STK Push result: {result}")
         
         if "ResponseCode" in result and result["ResponseCode"] == "0":
-            # Save transaction to database
-            save_transaction_request(
-                result["CheckoutRequestID"],
-                result["MerchantRequestID"],
-                order_type,
-                order_id,
-                user_id,
-                amount,
-                phone_number
-            )
+            # Create the order/booking in pending state
+            connection = get_db_connection()
+            if not connection:
+                return {"error": "Database connection failed"}
             
-            return {
-                "success": True,
-                "checkoutRequestId": result["CheckoutRequestID"],
-                "merchantRequestId": result["MerchantRequestID"]
-            }
+            cursor = connection.cursor()
+            
+            try:
+                # For artwork orders
+                if order_type == 'artwork':
+                    query = """
+                    INSERT INTO artwork_orders (user_id, artwork_id, amount, delivery_fee, delivery_address, status)
+                    VALUES (%s, %s, %s, %s, %s, 'pending')
+                    """
+                    cursor.execute(query, (
+                        user_id,
+                        order_id,
+                        amount * 0.9,  # 90% of amount for artwork
+                        amount * 0.1,  # 10% for delivery
+                        "To be provided"  # Default address
+                    ))
+                    order_id = cursor.lastrowid
+                
+                # For exhibition bookings
+                elif order_type == 'exhibition':
+                    query = """
+                    INSERT INTO exhibition_bookings (user_id, exhibition_id, slots, amount, status)
+                    VALUES (%s, %s, %s, %s, 'pending')
+                    """
+                    cursor.execute(query, (
+                        user_id,
+                        order_id,
+                        int(amount / (amount / 1)),  # Calculate slots
+                        amount,
+                        "pending"
+                    ))
+                    order_id = cursor.lastrowid
+                
+                # Save transaction details
+                query = """
+                INSERT INTO mpesa_transactions 
+                (order_type, order_id, user_id, amount, phone_number, merchant_request_id, checkout_request_id, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')
+                """
+                cursor.execute(query, (
+                    order_type,
+                    order_id,
+                    user_id,
+                    amount,
+                    phone_number,
+                    result["MerchantRequestID"],
+                    result["CheckoutRequestID"]
+                ))
+                
+                connection.commit()
+                
+                return {
+                    "success": True,
+                    "checkoutRequestId": result["CheckoutRequestID"],
+                    "merchantRequestId": result["MerchantRequestID"],
+                    "orderId": order_id
+                }
+            
+            except Exception as e:
+                print(f"Database error: {e}")
+                connection.rollback()
+                return {"error": "Failed to save order details"}
+            finally:
+                cursor.close()
+                connection.close()
         else:
             return {
                 "error": result.get("errorMessage", "STK Push failed"),
@@ -400,3 +453,87 @@ def handle_stk_push_request(request_data):
     except Exception as e:
         print(f"Error handling STK Push request: {e}")
         return {"error": str(e)}
+
+def get_user_orders(user_id):
+    """Get all orders and tickets for a user"""
+    connection = get_db_connection()
+    if not connection:
+        return {"error": "Database connection failed"}
+    
+    cursor = connection.cursor()
+    try:
+        # Get artwork orders
+        orders_query = """
+        SELECT o.*, a.title as artwork_title, a.artist, a.image_url
+        FROM artwork_orders o
+        JOIN artworks a ON o.artwork_id = a.id
+        WHERE o.user_id = %s
+        ORDER BY o.created_at DESC
+        """
+        cursor.execute(orders_query, (user_id,))
+        orders = [dict_from_row(row, cursor) for row in cursor.fetchall()]
+        
+        # Get exhibition bookings
+        tickets_query = """
+        SELECT b.*, e.title as exhibition_title, e.location, e.image_url
+        FROM exhibition_bookings b
+        JOIN exhibitions e ON b.exhibition_id = e.id
+        WHERE b.user_id = %s
+        ORDER BY b.created_at DESC
+        """
+        cursor.execute(tickets_query, (user_id,))
+        tickets = [dict_from_row(row, cursor) for row in cursor.fetchall()]
+        
+        return {
+            "orders": orders,
+            "tickets": tickets
+        }
+    except Exception as e:
+        print(f"Error getting user orders: {e}")
+        return {"error": str(e)}
+    finally:
+        cursor.close()
+        connection.close()
+
+def get_all_admin_orders():
+    """Get all orders and tickets for admin dashboard"""
+    connection = get_db_connection()
+    if not connection:
+        return {"error": "Database connection failed"}
+    
+    cursor = connection.cursor()
+    try:
+        # Get all artwork orders
+        orders_query = """
+        SELECT o.*, u.name as customer_name, u.email as customer_email,
+               a.title as artwork_title, a.artist, a.image_url
+        FROM artwork_orders o
+        JOIN users u ON o.user_id = u.id
+        JOIN artworks a ON o.artwork_id = a.id
+        ORDER BY o.created_at DESC
+        """
+        cursor.execute(orders_query)
+        orders = [dict_from_row(row, cursor) for row in cursor.fetchall()]
+        
+        # Get all exhibition bookings
+        tickets_query = """
+        SELECT b.*, u.name as customer_name, u.email as customer_email,
+               e.title as exhibition_title, e.location, e.image_url
+        FROM exhibition_bookings b
+        JOIN users u ON b.user_id = u.id
+        JOIN exhibitions e ON b.exhibition_id = e.id
+        ORDER BY b.created_at DESC
+        """
+        cursor.execute(tickets_query)
+        tickets = [dict_from_row(row, cursor) for row in cursor.fetchall()]
+        
+        return {
+            "orders": orders,
+            "tickets": tickets
+        }
+    except Exception as e:
+        print(f"Error getting admin orders: {e}")
+        return {"error": str(e)}
+    finally:
+        cursor.close()
+        connection.close()

@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS artwork_orders (
     FOREIGN KEY (artwork_id) REFERENCES artworks (id)
 );
 
--- Exhibition bookings table
+-- Exhibition bookings table (tickets)
 CREATE TABLE IF NOT EXISTS exhibition_bookings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

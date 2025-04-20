@@ -290,6 +290,55 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json_dumps(response).encode())
             return
         
+        # Handle admin orders and tickets
+        elif path == '/admin/orders':
+            auth_header = self.headers.get('Authorization', '')
+            token = extract_auth_token(auth_header)
+            
+            if not token:
+                self._set_response(401)
+                self.wfile.write(json_dumps({"error": "Authentication required"}).encode())
+                return
+                
+            payload = verify_token(token)
+            if not payload.get("is_admin", False):
+                self._set_response(403)
+                self.wfile.write(json_dumps({"error": "Admin access required"}).encode())
+                return
+            
+            response = get_all_admin_orders()
+            if "error" in response:
+                self._set_response(500)
+            else:
+                self._set_response(200)
+            self.wfile.write(json_dumps(response).encode())
+            return
+            
+        # Handle user orders and tickets
+        elif path.startswith('/user/orders/'):
+            user_id = path.split('/')[-1]
+            auth_header = self.headers.get('Authorization', '')
+            token = extract_auth_token(auth_header)
+            
+            if not token:
+                self._set_response(401)
+                self.wfile.write(json_dumps({"error": "Authentication required"}).encode())
+                return
+                
+            payload = verify_token(token)
+            if str(payload.get("user_id")) != str(user_id):
+                self._set_response(403)
+                self.wfile.write(json_dumps({"error": "Unauthorized access"}).encode())
+                return
+            
+            response = get_user_orders(user_id)
+            if "error" in response:
+                self._set_response(500)
+            else:
+                self._set_response(200)
+            self.wfile.write(json_dumps(response).encode())
+            return
+        
         # Default 404 response
         self._set_response(404)
         self.wfile.write(json_dumps({"error": "Resource not found"}).encode())
