@@ -17,6 +17,7 @@ from contact import create_contact_message, get_messages, update_message, json_d
 from db_setup import initialize_database
 from middleware import auth_required, admin_required, extract_auth_token, verify_token
 from mpesa import handle_stk_push_request, check_transaction_status, handle_mpesa_callback
+from database import get_all_orders, get_all_exhibition_tickets
 
 # Define the port
 PORT = 8000
@@ -103,12 +104,12 @@ mock_tickets = [
     }
 ]
 
-# Function to get all tickets (mock implementation)
+# Function to get all tickets (using database)
 def get_all_tickets(auth_header):
     """Get all tickets (admin only)"""
     print(f"Getting all tickets with auth header: {auth_header[:20]}... (truncated)")
     
-    # Extract and verify token - directly use the token from auth_header
+    # Extract and verify token
     token = extract_auth_token(auth_header)
     if not token:
         print("Authentication required - no token found")
@@ -124,27 +125,13 @@ def get_all_tickets(auth_header):
         print("Access denied - not an admin user")
         return {"error": "Unauthorized access: Admin privileges required"}
     
-    print(f"Admin user authenticated, returning {len(mock_tickets)} tickets")
-    # Return tickets data
-    return {"tickets": mock_tickets}
+    # Get tickets from database
+    return get_all_exhibition_tickets()
 
-# Function to generate exhibition ticket (mock implementation)
-def generate_ticket(booking_id, auth_header):
-    # Extract and verify token
-    token = extract_auth_token(auth_header)
-    if not token:
-        return {"error": "Authentication required"}
-    
-    payload = verify_token(token)
-    if isinstance(payload, dict) and "error" in payload:
-        return {"error": payload["error"]}
-    
-    # In a real application, we would generate a PDF here
-    # For demo purposes, we'll return mock data
-    return {
-        "pdfData": "Mock PDF data for ticket " + booking_id,
-        "success": True
-    }
+# Function to get all orders (admin only)
+def get_all_admin_orders():
+    """Get all orders (admin only)"""
+    return get_all_orders()
 
 class RequestHandler(http.server.BaseHTTPRequestHandler):
     

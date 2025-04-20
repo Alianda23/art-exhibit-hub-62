@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -13,41 +14,36 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from 'date-fns';
 
-// Mock data for orders
-const mockOrders = [
-  {
-    id: "ord-001",
-    customer: "John Doe",
-    email: "john@example.com",
-    date: "2023-04-15T10:30:00",
-    artwork: "Abstract Sunset",
-    amount: 2500,
-    status: "completed"
-  },
-  {
-    id: "ord-002",
-    customer: "Sarah Johnson",
-    email: "sarah@example.com",
-    date: "2023-04-18T14:20:00",
-    artwork: "Mountain View",
-    amount: 1800,
-    status: "processing"
-  },
-  {
-    id: "ord-003",
-    customer: "Michael Wong",
-    email: "michael@example.com",
-    date: "2023-04-20T09:15:00",
-    artwork: "Ocean Waves",
-    amount: 3200,
-    status: "completed"
-  }
-];
+// Types for orders
+interface Order {
+  id: string;
+  customer_name: string;
+  customer_email: string;
+  artwork_title: string;
+  created_at: string;
+  total_amount: number;
+  payment_status: 'pending' | 'completed' | 'failed';
+}
 
 const AdminOrders = () => {
-  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
-  const formatDate = (dateString) => {
+  const { data: ordersData, isLoading, error } = useQuery({
+    queryKey: ['admin-orders'],
+    queryFn: async () => {
+      const response = await fetch('/orders', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch orders');
+      }
+      return response.json();
+    }
+  });
+
+  const formatDate = (dateString: string) => {
     try {
       return format(new Date(dateString), 'PP p');
     } catch (error) {
@@ -55,18 +51,42 @@ const AdminOrders = () => {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
         return 'bg-green-500';
-      case 'processing':
+      case 'pending':
         return 'bg-yellow-500';
-      case 'cancelled':
+      case 'failed':
         return 'bg-red-500';
       default:
         return 'bg-gray-500';
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <h1 className="text-2xl font-bold mb-6">Orders Management</h1>
+        <div className="flex justify-center items-center h-64">
+          <p>Loading orders...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <h1 className="text-2xl font-bold mb-6">Orders Management</h1>
+        <div className="flex justify-center items-center h-64">
+          <p className="text-red-500">Error loading orders: {(error as Error).message}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const orders = ordersData?.orders || [];
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -89,15 +109,15 @@ const AdminOrders = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mockOrders.map((order) => (
+                {orders.map((order: Order) => (
                   <TableRow key={order.id}>
                     <TableCell className="font-mono">{order.id}</TableCell>
-                    <TableCell>{order.customer}</TableCell>
-                    <TableCell>{formatDate(order.date)}</TableCell>
-                    <TableCell>${order.amount.toLocaleString()}</TableCell>
+                    <TableCell>{order.customer_name}</TableCell>
+                    <TableCell>{formatDate(order.created_at)}</TableCell>
+                    <TableCell>KES {order.total_amount.toLocaleString()}</TableCell>
                     <TableCell>
-                      <Badge className={getStatusColor(order.status)}>
-                        {order.status.toUpperCase()}
+                      <Badge className={getStatusColor(order.payment_status)}>
+                        {order.payment_status.toUpperCase()}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -129,28 +149,28 @@ const AdminOrders = () => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Date:</p>
-                    <p>{formatDate(selectedOrder.date)}</p>
+                    <p>{formatDate(selectedOrder.created_at)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Customer:</p>
-                    <p className="font-medium">{selectedOrder.customer}</p>
+                    <p className="font-medium">{selectedOrder.customer_name}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Email:</p>
-                    <p>{selectedOrder.email}</p>
+                    <p>{selectedOrder.customer_email}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Artwork:</p>
-                    <p>{selectedOrder.artwork}</p>
+                    <p>{selectedOrder.artwork_title}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Amount:</p>
-                    <p className="font-medium">${selectedOrder.amount.toLocaleString()}</p>
+                    <p className="font-medium">KES {selectedOrder.total_amount.toLocaleString()}</p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-sm text-gray-500">Status:</p>
-                    <Badge className={getStatusColor(selectedOrder.status)}>
-                      {selectedOrder.status.toUpperCase()}
+                    <Badge className={getStatusColor(selectedOrder.payment_status)}>
+                      {selectedOrder.payment_status.toUpperCase()}
                     </Badge>
                   </div>
                 </div>
@@ -159,11 +179,6 @@ const AdminOrders = () => {
                   <Button variant="outline" size="sm">
                     Download Invoice
                   </Button>
-                  {selectedOrder.status === 'processing' && (
-                    <Button size="sm">
-                      Mark as Complete
-                    </Button>
-                  )}
                 </div>
               </div>
             </div>

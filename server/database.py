@@ -154,3 +154,79 @@ def update_message_status(message_id, status):
         if connection.is_connected():
             cursor.close()
             connection.close()
+
+def get_all_orders():
+    """Get all artwork orders from the database"""
+    connection = get_db_connection()
+    if connection is None:
+        return {"error": "Database connection failed"}
+    
+    try:
+        cursor = connection.cursor()
+        
+        # Get all orders with user and artwork details
+        query = """
+        SELECT ao.*, u.name as customer_name, u.email as customer_email,
+               a.title as artwork_title, a.price as artwork_price
+        FROM artwork_orders ao
+        JOIN users u ON ao.user_id = u.id
+        JOIN artworks a ON ao.artwork_id = a.id
+        ORDER BY ao.created_at DESC
+        """
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        orders = []
+        for row in rows:
+            order_dict = dict_from_row(row, cursor)
+            orders.append(order_dict)
+        
+        print(f"Retrieved {len(orders)} orders")
+        return {"orders": orders}
+    
+    except Error as e:
+        print(f"Error getting orders: {e}")
+        return {"error": str(e)}
+    
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
+
+def get_all_exhibition_tickets():
+    """Get all exhibition tickets from the database"""
+    connection = get_db_connection()
+    if connection is None:
+        return {"error": "Database connection failed"}
+    
+    try:
+        cursor = connection.cursor()
+        
+        # Get all tickets with user and exhibition details
+        query = """
+        SELECT eb.*, u.name as customer_name, u.email as customer_email,
+               e.title as exhibition_title, e.image_url as exhibition_image_url
+        FROM exhibition_bookings eb
+        JOIN users u ON eb.user_id = u.id
+        JOIN exhibitions e ON eb.exhibition_id = e.id
+        ORDER BY eb.created_at DESC
+        """
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        tickets = []
+        for row in rows:
+            ticket_dict = dict_from_row(row, cursor)
+            tickets.append(ticket_dict)
+        
+        print(f"Retrieved {len(tickets)} tickets")
+        return {"tickets": tickets}
+    
+    except Error as e:
+        print(f"Error getting tickets: {e}")
+        return {"error": str(e)}
+    
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
