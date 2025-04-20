@@ -188,11 +188,24 @@ const Payment = () => {
       if (!order) {
         throw new Error('Order details not found');
       }
+      
+      if (!currentUser || !currentUser.id) {
+        throw new Error('User not logged in or user ID not found');
+      }
 
       // Generate a reference for this transaction
       const accountReference = order.type === 'artwork' 
         ? `ART-${order.itemId}` 
         : `EXH-${order.itemId}`;
+
+      console.log('Sending payment with the following details:', {
+        phoneNumber,
+        amount: order.totalAmount,
+        orderType: order.type,
+        orderId: order.itemId,
+        userId: currentUser.id,
+        accountReference
+      });
 
       // Call M-Pesa STK Push
       const response = await initiateSTKPush(

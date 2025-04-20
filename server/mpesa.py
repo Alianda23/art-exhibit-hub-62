@@ -62,15 +62,21 @@ def initiate_stk_push(phone_number, amount, account_reference, order_type, order
         "Content-Type": "application/json"
     }
     
+    # Ensure amount is an integer (M-Pesa requires integer values)
+    try:
+        amount_int = int(float(amount))
+    except (ValueError, TypeError):
+        return {"error": "Invalid amount format. Must be a number."}
+    
     payload = {
         "BusinessShortCode": BUSINESS_SHORT_CODE,
         "Password": password,
         "Timestamp": timestamp,
         "TransactionType": "CustomerPayBillOnline",
-        "Amount": int(amount),
-        "PartyA": int(phone_number),
+        "Amount": amount_int,
+        "PartyA": phone_number.replace("+", ""),  # Remove any + character
         "PartyB": BUSINESS_SHORT_CODE,
-        "PhoneNumber": int(phone_number),
+        "PhoneNumber": phone_number.replace("+", ""),  # Remove any + character
         "CallBackURL": CALLBACK_URL,
         "AccountReference": account_reference,
         "TransactionDesc": f"Payment for {order_type} #{order_id}"
@@ -130,7 +136,7 @@ def initiate_stk_push(phone_number, amount, account_reference, order_type, order
                     order_type,
                     order_id,
                     user_id,
-                    amount,
+                    amount_int,
                     phone_number,
                     result["MerchantRequestID"],
                     result["CheckoutRequestID"]
@@ -439,6 +445,13 @@ def handle_mpesa_callback(callback_data):
 def handle_stk_push_request(request_data):
     """Handle STK Push request from frontend"""
     try:
+        # Extract all required fields from request data
+        required_fields = ["phoneNumber", "amount", "orderType", "orderId", "userId", "accountReference"]
+        missing_fields = [field for field in required_fields if field not in request_data or not request_data.get(field)]
+        
+        if missing_fields:
+            return {"error": f"Missing required fields: {', '.join(missing_fields)}"}
+        
         phone_number = request_data.get("phoneNumber")
         amount = request_data.get("amount")
         order_type = request_data.get("orderType")
@@ -446,9 +459,10 @@ def handle_stk_push_request(request_data):
         user_id = request_data.get("userId")
         account_reference = request_data.get("accountReference")
         
-        if not all([phone_number, amount, order_type, order_id, user_id, account_reference]):
-            return {"error": "Missing required fields"}
+        # Log the request data for debugging
+        print(f"STK Push request data: {request_data}")
         
+        # Proceed with STK Push
         return initiate_stk_push(phone_number, amount, account_reference, order_type, order_id, user_id)
     except Exception as e:
         print(f"Error handling STK Push request: {e}")

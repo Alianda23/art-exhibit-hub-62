@@ -1,3 +1,4 @@
+
 // M-Pesa API utilities
 
 // M-Pesa credentials
@@ -32,14 +33,15 @@ export const initiateSTKPush = async (
       validatedPhone = '254' + validatedPhone;
     }
     
-    console.log(`Initiating STK Push for phone: ${validatedPhone}, amount: ${amount}, order type: ${orderType}`);
+    console.log(`Initiating STK Push for phone: ${validatedPhone}, amount: ${amount}, order type: ${orderType}, orderId: ${orderId}`);
     
     // Add user ID to request body
     const userId = localStorage.getItem('userId') || '';
     
+    // Ensure all required fields are included
     const requestBody = {
       phoneNumber: validatedPhone,
-      amount,
+      amount: Math.round(amount), // Ensure amount is an integer
       orderType,
       orderId,
       userId,
