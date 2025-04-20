@@ -83,7 +83,7 @@ def initialize_database():
         image_url VARCHAR(255),
         total_slots INT NOT NULL,
         available_slots INT NOT NULL,
-        status ENUM('upcoming', 'ongoing', 'past') NOT NULL,
+        status ENUM('upcoming', 'ongoing', 'past') NOT NULL DEFAULT 'upcoming',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
@@ -100,15 +100,14 @@ def initialize_database():
         delivery_address TEXT NOT NULL,
         payment_method ENUM('mpesa') NOT NULL,
         payment_status ENUM('pending', 'completed', 'failed') NOT NULL DEFAULT 'pending',
-        mpesa_transaction_id VARCHAR(50),
-        order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         total_amount DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (artwork_id) REFERENCES artworks(id) ON DELETE CASCADE
     );
     """
     
-    # Create exhibition bookings table
+    # Create exhibition bookings (tickets) table
     exhibition_bookings_table = """
     CREATE TABLE IF NOT EXISTS exhibition_bookings (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -120,11 +119,31 @@ def initialize_database():
         slots INT NOT NULL,
         payment_method ENUM('mpesa') NOT NULL,
         payment_status ENUM('pending', 'completed', 'failed') NOT NULL DEFAULT 'pending',
-        mpesa_transaction_id VARCHAR(50),
-        booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         total_amount DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ticket_code VARCHAR(50) UNIQUE,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (exhibition_id) REFERENCES exhibitions(id) ON DELETE CASCADE
+    );
+    """
+    
+    # Create mpesa transactions table
+    mpesa_transactions_table = """
+    CREATE TABLE IF NOT EXISTS mpesa_transactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        checkout_request_id VARCHAR(100) NOT NULL,
+        merchant_request_id VARCHAR(100) NOT NULL,
+        order_type ENUM('artwork', 'exhibition') NOT NULL,
+        order_id INT NOT NULL,
+        user_id INT NOT NULL,
+        amount DECIMAL(10, 2) NOT NULL,
+        phone_number VARCHAR(20) NOT NULL,
+        result_code VARCHAR(10),
+        result_desc VARCHAR(255),
+        transaction_id VARCHAR(50),
+        status ENUM('pending', 'completed', 'failed') NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
     """
     
@@ -136,28 +155,9 @@ def initialize_database():
         email VARCHAR(255) NOT NULL,
         phone VARCHAR(20),
         message TEXT NOT NULL,
-        date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         status ENUM('new', 'read', 'replied') NOT NULL DEFAULT 'new',
-        source VARCHAR(50) DEFAULT 'contact_form'
-    );
-    """
-    
-    # Create mpesa transactions table
-    mpesa_transactions_table = """
-    CREATE TABLE IF NOT EXISTS mpesa_transactions (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        checkout_request_id VARCHAR(100) NOT NULL,
-        merchant_request_id VARCHAR(100) NOT NULL,
-        order_type VARCHAR(20) NOT NULL,
-        order_id INT NOT NULL,
-        user_id INT NOT NULL,
-        amount DECIMAL(10, 2) NOT NULL,
-        phone_number VARCHAR(20) NOT NULL,
-        result_code VARCHAR(10),
-        result_desc VARCHAR(255),
-        transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        status ENUM('pending', 'completed', 'failed') NOT NULL DEFAULT 'pending',
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        source VARCHAR(50) DEFAULT 'contact_form',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
     
@@ -168,13 +168,13 @@ def initialize_database():
         cursor.execute(exhibitions_table)
         cursor.execute(artwork_orders_table)
         cursor.execute(exhibition_bookings_table)
-        cursor.execute(contact_messages_table)
         cursor.execute(mpesa_transactions_table)
+        cursor.execute(contact_messages_table)
         connection.commit()
-        print("Database initialized successfully")
+        print("Database tables created successfully")
         return True
     except Error as e:
-        print(f"Error initializing database: {e}")
+        print(f"Error creating tables: {e}")
         return False
     finally:
         if connection.is_connected():
@@ -202,3 +202,4 @@ if __name__ == "__main__":
     
     # Initialize tables
     initialize_database()
+
